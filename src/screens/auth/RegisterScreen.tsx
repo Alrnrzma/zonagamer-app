@@ -1,3 +1,4 @@
+// src/screens/auth/RegisterScreen.tsx
 import React, { useMemo, useState } from "react";
 import {
   View,
@@ -12,30 +13,28 @@ import {
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../navigation/StackNavigator";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type Props = NativeStackScreenProps<RootStackParamList, "Register">;
 
-type NewUser = {
-  id: number;            // por ahora autoincrement simple Date.now()
-  nombre: string;
-  email: string;
-  telefono?: string;
-  createdAt: string;
-  // en el futuro: roles/permisos (todos true por ahora)
-  permisos: {
-    puedeCrearLocales: boolean;
-    puedeRegistrarTorneos: boolean;
-    puedeNavegar: boolean;
-  };
-};
+// 👇 helpers de sesión local y tipos
+import { registerFirebase } from "../../services/auth.firebase";
+import { Role } from "../../types";
+
+// ✅ IMPORTANTE: Importamos el hook del contexto
+import { useAuth } from "../../context/AuthContext";
+
+type Props = NativeStackScreenProps<RootStackParamList, "Register">;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function RegisterScreen({ navigation }: Props) {
+  // 👇 Obtenemos la función signIn del contexto
+  const { signIn } = useAuth();
+
+  const insets = useSafeAreaInsets();
+
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -44,7 +43,9 @@ export default function RegisterScreen({ navigation }: Props) {
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const insets = useSafeAreaInsets();
+
+  // 👇 selector de rol
+  const [role, setRole] = useState<Role>("user");
 
   const formValid = useMemo(() => {
     return (
@@ -55,50 +56,32 @@ export default function RegisterScreen({ navigation }: Props) {
     );
   }, [nombre, email, password, confirm]);
 
-  const saveLocalUser = async (u: NewUser) => {
-    const key = "@zg_users"; // clave local
-    const raw = await AsyncStorage.getItem(key);
-    const list: NewUser[] = raw ? JSON.parse(raw) : [];
-    // validar duplicado por email
-    if (list.some(x => x.email.toLowerCase() === u.email.toLowerCase())) {
-      throw new Error("El correo ya está registrado en este dispositivo.");
-    }
-    list.push(u);
-    await AsyncStorage.setItem(key, JSON.stringify(list));
-  };
-
+  // crea el usuario en firebase auth + firestore + local y loguea
   const handleRegister = async () => {
-    if (!formValid) return;
+  if (!formValid) return;
 
-    setLoading(true);
-    try {
-      // FUTURO: cuando integremos Firebase, aquí llamamos createUserWithEmailAndPassword(...)
-      // y luego guardamos el perfil básico en Mongo. Por ahora, guardamos local/offline.
-      const user: NewUser = {
-        id: Date.now(), // number
-        nombre: nombre.trim(),
-        email: email.trim(),
-        telefono: telefono.trim() || undefined,
-        createdAt: new Date().toISOString(),
-        permisos: {
-          puedeCrearLocales: true,
-          puedeRegistrarTorneos: true,
-          puedeNavegar: true,
-        },
-      };
+  setLoading(true);
+  try {
+    const created = await registerFirebase({
+      nombre: nombre.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+      telefono: telefono.trim() || undefined,
+      role, // si quieres permitirlo (si no, puedes forzarlo a "user")
+    });
 
-      await saveLocalUser(user);
+    // ✅ actualiza contexto y entra al Home
+    await signIn(created);
 
-      // feedback
-      Alert.alert("Cuenta creada", "Tu registro fue exitoso.");
-      // Navega a Home y limpia el stack (como login realizado)
-      navigation.reset({ index: 0, routes: [{ name: "Home" }] });
-    } catch (err: any) {
-      Alert.alert("No se pudo registrar", err?.message ?? "Inténtalo de nuevo.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    Alert.alert("Cuenta creada", "Tu registro fue exitoso.");
+  } catch (err: any) {
+    Alert.alert("No se pudo registrar", err?.message ?? "Inténtalo de nuevo.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -110,31 +93,38 @@ export default function RegisterScreen({ navigation }: Props) {
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         style={[
-        styles.headerBar,
-        {
-      paddingTop: insets.top + 8,   // 👈 separa del notch/estatus
-      minHeight: insets.top + 64,   // 👈 asegura alto cómodo
-         },
-    ]}
+          styles.headerBar,
+          {
+            paddingTop: insets.top + 8,
+            minHeight: insets.top + 64,
+          },
+        ]}
       >
-      <TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()}>
-        <MaterialIcons name="arrow-back" size={26} color="#fff" />
-      </TouchableOpacity>
-        {/* Título principal + subtítulo */}
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={() => navigation.goBack()}
+        >
+          <MaterialIcons name="arrow-back" size={26} color="#fff" />
+        </TouchableOpacity>
+
         <View style={{ alignItems: "center", flex: 1 }}>
-        <Text style={{ color: "#fff", fontWeight: "800", fontSize: 18, marginBottom: 2 }}>
-        ZonaGamer
-        </Text>
-        <Text style={{ color: "#e5e7eb", fontWeight: "600", fontSize: 12 }}>
-        Crear cuenta
-        </Text>
+          <Text
+            style={{
+              color: "#fff",
+              fontWeight: "800",
+              fontSize: 18,
+              marginBottom: 2,
+            }}
+          >
+            ZonaGamer
+          </Text>
+          <Text style={{ color: "#e5e7eb", fontWeight: "600", fontSize: 12 }}>
+            Crear cuenta
+          </Text>
         </View>
 
-        {/* placeholder para balancear el espacio del back button */}
         <View style={styles.iconButton} />
       </LinearGradient>
-
-      
 
       {/* Formulario */}
       <View style={styles.form}>
@@ -172,6 +162,37 @@ export default function RegisterScreen({ navigation }: Props) {
           returnKeyType="next"
         />
 
+        {/* Selector de Rol */}
+        <Text style={styles.label}>Tipo de cuenta</Text>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <TouchableOpacity
+            onPress={() => setRole("user")}
+            style={[styles.chip, role === "user" && styles.chipActive]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                role === "user" && styles.chipTextActive,
+              ]}
+            >
+              Usuario
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setRole("admin")}
+            style={[styles.chip, role === "admin" && styles.chipActive]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                role === "admin" && styles.chipTextActive,
+              ]}
+            >
+              Admin (local)
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.label}>Contraseña</Text>
         <View style={styles.inputRow}>
           <TextInput
@@ -182,8 +203,15 @@ export default function RegisterScreen({ navigation }: Props) {
             value={password}
             onChangeText={setPassword}
           />
-          <TouchableOpacity onPress={() => setShowPass(v => !v)} style={styles.eyeBtn}>
-            <MaterialIcons name={showPass ? "visibility-off" : "visibility"} size={22} color="#94A3B8" />
+          <TouchableOpacity
+            onPress={() => setShowPass((v) => !v)}
+            style={styles.eyeBtn}
+          >
+            <MaterialIcons
+              name={showPass ? "visibility-off" : "visibility"}
+              size={22}
+              color="#94A3B8"
+            />
           </TouchableOpacity>
         </View>
 
@@ -197,29 +225,49 @@ export default function RegisterScreen({ navigation }: Props) {
             value={confirm}
             onChangeText={setConfirm}
           />
-          <TouchableOpacity onPress={() => setShowConfirm(v => !v)} style={styles.eyeBtn}>
-            <MaterialIcons name={showConfirm ? "visibility-off" : "visibility"} size={22} color="#94A3B8" />
+          <TouchableOpacity
+            onPress={() => setShowConfirm((v) => !v)}
+            style={styles.eyeBtn}
+          >
+            <MaterialIcons
+              name={showConfirm ? "visibility-off" : "visibility"}
+              size={22}
+              color="#94A3B8"
+            />
           </TouchableOpacity>
         </View>
 
-        {/* Estado de validación básico */}
+        {/* Estado de validación */}
         <View style={styles.hints}>
           <Hint ok={nombre.trim().length >= 3} text="Nombre de 3+ caracteres" />
           <Hint ok={EMAIL_RE.test(email)} text="Correo con formato válido" />
           <Hint ok={password.length >= 6} text="Contraseña de 6+ caracteres" />
-          <Hint ok={password === confirm && confirm.length > 0} text="Las contraseñas coinciden" />
+          <Hint
+            ok={password === confirm && confirm.length > 0}
+            text="Las contraseñas coinciden"
+          />
         </View>
 
         <TouchableOpacity
-          style={[styles.btn, !formValid || loading ? styles.btnDisabled : null]}
+          style={[
+            styles.btn,
+            !formValid || loading ? styles.btnDisabled : null,
+          ]}
           onPress={handleRegister}
           disabled={!formValid || loading}
           activeOpacity={0.8}
         >
-          {loading ? <ActivityIndicator /> : <Text style={styles.btnText}>Crear cuenta</Text>}
+          {loading ? (
+            <ActivityIndicator />
+          ) : (
+            <Text style={styles.btnText}>Crear cuenta</Text>
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate("Login")} style={{ marginTop: 14 }}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Login")}
+          style={{ marginTop: 14 }}
+        >
           <Text style={{ color: "#60a5fa", textAlign: "center" }}>
             Ya tengo una cuenta
           </Text>
@@ -233,8 +281,14 @@ export default function RegisterScreen({ navigation }: Props) {
 function Hint({ ok, text }: { ok: boolean; text: string }) {
   return (
     <View style={styles.hintRow}>
-      <MaterialIcons name={ok ? "check-circle" : "cancel"} size={18} color={ok ? "#22c55e" : "#ef4444"} />
-      <Text style={[styles.hintText, { color: ok ? "#9CA3AF" : "#ef9a9a" }]}>{text}</Text>
+      <MaterialIcons
+        name={ok ? "check-circle" : "cancel"}
+        size={18}
+        color={ok ? "#22c55e" : "#ef4444"}
+      />
+      <Text style={[styles.hintText, { color: ok ? "#9CA3AF" : "#ef9a9a" }]}>
+        {text}
+      </Text>
     </View>
   );
 }
@@ -242,14 +296,21 @@ function Hint({ ok, text }: { ok: boolean; text: string }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0b0f1a" },
   headerBar: {
-    height: 56, paddingHorizontal: 12,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    height: 56,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   iconButton: { padding: 8 },
-  headerTitle: { color: "#fff", fontWeight: "bold", fontSize: 18 },
 
   form: { padding: 16 },
-  label: { color: "#cbd5e1", marginTop: 12, marginBottom: 6, fontWeight: "600" },
+  label: {
+    color: "#cbd5e1",
+    marginTop: 12,
+    marginBottom: 6,
+    fontWeight: "600",
+  },
   input: {
     backgroundColor: "#111827",
     color: "#e5e7eb",
@@ -263,10 +324,25 @@ const styles = StyleSheet.create({
   inputFlex: { flex: 1 },
   eyeBtn: { marginLeft: 8, padding: 8 },
 
+  // Chips de rol
+  chip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "#1f2937",
+  },
+  chipActive: { backgroundColor: "#1e293b", borderColor: "#3b82f6" },
+  chipText: { color: "#cbd5e1" },
+  chipTextActive: { color: "#93c5fd", fontWeight: "700" },
+
+  // Validación
   hints: { marginVertical: 10 },
   hintRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
   hintText: { marginLeft: 6 },
 
+  // Botón principal
   btn: {
     marginTop: 8,
     backgroundColor: "#3b82f6",

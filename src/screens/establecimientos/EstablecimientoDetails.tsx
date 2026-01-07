@@ -8,6 +8,8 @@ import * as svc from "../../services/establecimientos.local";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import Stars from "../../components/Stars";
+import * as gamesSvc from "../../services/games.local";
+
 
 
 type Props = StackScreenProps<RootStackParamList, "establecimientoDetails">;
@@ -18,27 +20,72 @@ export default function EstablecimientoDetails({ route, navigation }: Props) {
 
   const [photoUri, setPhotoUri] = useState<string | undefined>();
   const [rating, setRating] = useState<number>(0);
-  const [games, setGames] = useState<string>("");
   const [openTime, setOpenTime] = useState<string>("");
   const [closeTime, setCloseTime] = useState<string>("");
   const [coords, setCoords] = useState<{lat:number;lng:number} | undefined>();
   const [address, setAddress] = useState<string>("");
+  const [nombre, setNombre] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [gameIdx, setGameIdx] = useState<{ id: number; title: string }[]>([]);
+  const [selectedGameIds, setSelectedGameIds] = useState<number[]>([]);
+
 
   useEffect(() => {
-    (async () => {
-      const it = await svc.getById(id);
-      setItem(it ?? null);
-      if (it) {
-        setPhotoUri(it.photoUri);
-        setRating(it.rating ?? 0);
-        setGames((it.games ?? []).join(", "));
-        setOpenTime(it.openTime ?? "");
-        setCloseTime(it.closeTime ?? "");
-        setCoords(it.location);
-        setAddress(it.address ?? "");
-      }
-    })();
-  }, [id]);
+  (async () => {
+    // 1) cargar juegos (para chips) SIEMPRE
+    const gs = await gamesSvc.list();
+    setGameIdx(gs.map(g => ({ id: g.id, title: g.title })));
+
+    // ✅ MODO CREAR (id=0)
+    if (id === 0) {
+      const empty: svc.Establecimiento = {
+        id: 0,
+        nombre: "Nuevo establecimiento",
+        direccion: "",
+        rating: 0,
+        games: [],
+      };
+
+      
+      setItem(empty);
+      setPhotoUri(undefined);
+      setRating(0);
+      setOpenTime("");
+      setCloseTime("");
+      setCoords(undefined);
+      setAddress("");
+      setNombre("");
+      setDireccion("");
+      setSelectedGameIds([]);
+      return;
+    }
+
+    // ✅ MODO EDITAR
+    const it = await svc.getById(id);
+    setItem(it ?? null);
+
+    if (it) {
+      setPhotoUri(it.photoUri);
+      setRating(it.rating ?? 0);
+      setOpenTime(it.openTime ?? "");
+      setCloseTime(it.closeTime ?? "");
+      setCoords(it.location);
+      setAddress(it.address ?? "");
+      setNombre(it.nombre ?? "");
+      setDireccion(it.direccion ?? "");
+      setOpenTime(it.openTime ?? "");
+      setCloseTime(it.closeTime ?? "");
+      setAddress(it.address ?? "");
+
+      const selected = gs
+        .filter(g => (it.games ?? []).includes(g.title))
+        .map(g => g.id);
+      setSelectedGameIds(selected);
+      
+    }
+  })();
+}, [id]);
+
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -74,23 +121,63 @@ export default function EstablecimientoDetails({ route, navigation }: Props) {
       : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 
   setCoords({ lat, lng });
-  setAddress(pretty);             // 👈 guarda la dirección legible en estado
+  setAddress(pretty);             
+};
+
+const toggleGame = (gameId: number) => {
+  setSelectedGameIds(prev =>
+    prev.includes(gameId) ? prev.filter(x => x !== gameId) : [...prev, gameId]
+  );
 };
 
 
   const save = async () => {
-    const gamesArr = games.split(",").map(s => s.trim()).filter(Boolean);
-    const updated = await svc.update(id, {
-      photoUri, rating, games: gamesArr,
-      openTime: openTime.trim(), closeTime: closeTime.trim(),
+  const selectedTitles = gameIdx
+  .filter(g => selectedGameIds.includes(g.id))
+  .map(g => g.title);
+
+
+  // ✅ crear
+  if (id === 0) {
+    const created = await svc.create({
+      nombre: nombre.trim() || "Nuevo establecimiento",
+      direccion: direccion.trim() || undefined,
+      photoUri,
+      rating,
+      games: selectedTitles,
+      openTime: openTime.trim(),
+      closeTime: closeTime.trim(),
       location: coords,
-      address, 
+      address,
     });
-    if (updated) {
-      Alert.alert("Guardado", "Cambios aplicados.");
-      setItem(updated);
-    }
-  };
+
+    Alert.alert("Creado", "Establecimiento agregado.");
+    navigation.replace("establecimientoDetails", { id: created.id }); // ya queda en modo editar
+    return;
+  }
+
+  // ✅ editar
+  const updated = await svc.update(id, {
+  nombre: nombre.trim(),
+  direccion: direccion.trim() || undefined,
+  photoUri,
+  rating,
+  games: selectedTitles,
+  openTime: openTime.trim(),
+  closeTime: closeTime.trim(),
+  location: coords,
+  address,
+});
+
+
+  if (updated) {
+    Alert.alert("Guardado", "Cambios aplicados.");
+    setItem(updated);
+    setNombre(updated.nombre ?? "");
+    setDireccion(updated.direccion ?? "");
+  }
+};
+
 
   const del = async () => {
     Alert.alert("Eliminar", "¿Borrar este establecimiento?", [
@@ -103,8 +190,25 @@ export default function EstablecimientoDetails({ route, navigation }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
-      <Text style={styles.title}>{item.nombre}</Text>
-      {!!item.direccion && <Text style={styles.text}>{item.direccion}</Text>}
+      <Text style={styles.title}>{id === 0 ? "Nuevo establecimiento" : item.nombre}</Text>
+
+      <Text style={styles.blockTitle}>Nombre</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Nombre del establecimiento"
+        placeholderTextColor="#9CA3AF"
+        value={nombre}
+        onChangeText={setNombre}
+      />
+
+      <Text style={[styles.blockTitle, { marginTop: 10 }]}>Dirección</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Dirección"
+        placeholderTextColor="#9CA3AF"
+        value={direccion}
+        onChangeText={setDireccion}
+      />
 
       {/* Foto */}
       <View style={styles.block}>
@@ -128,17 +232,23 @@ export default function EstablecimientoDetails({ route, navigation }: Props) {
       </View>
 
       {/* Juegos */}
-      <View style={styles.block}>
-        <Text style={styles.blockTitle}>Juegos disponibles</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ej: FIFA, Mortal Kombat, Street Fighter"
-          placeholderTextColor="#9CA3AF"
-          value={games}
-          onChangeText={setGames}
-        />
-        <Text style={{ color: "#64748b", fontSize: 12, marginTop: 6 }}>Separa por comas.</Text>
-      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {gameIdx.map(g => {
+        const active = selectedGameIds.includes(g.id);
+        return (
+          <TouchableOpacity
+            key={g.id}
+            style={[styles.chip, active && styles.chipActive]}
+            onPress={() => toggleGame(g.id)}
+          >
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>
+              {g.title}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+
 
       {/* Horario */}
       <View style={styles.block}>
@@ -185,7 +295,7 @@ export default function EstablecimientoDetails({ route, navigation }: Props) {
       }
       >
       {coords && (
-      <Marker coordinate={{ latitude: coords.lat, longitude: coords.lng }} title={item.nombre} />
+      <Marker coordinate={{ latitude: coords.lat, longitude: coords.lng }}title={nombre || "Establecimiento"} />
         )}
       </MapView>
     </View>
@@ -199,7 +309,7 @@ export default function EstablecimientoDetails({ route, navigation }: Props) {
       const url =
         Platform.OS === "ios"
           ? `http://maps.apple.com/?ll=${lat},${lng}`
-          : `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(item.nombre)})`;
+          : `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(nombre || "Establecimiento")})`;
       Linking.openURL(url);
     }}
     >
@@ -212,9 +322,15 @@ export default function EstablecimientoDetails({ route, navigation }: Props) {
         <Text style={styles.btnTxt}>Guardar cambios</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={[styles.btn, { backgroundColor: "#ef4444", marginTop: 8 }]} onPress={del}>
-        <Text style={styles.btnTxt}>Eliminar</Text>
+      {id !== 0 && (
+      <TouchableOpacity
+        style={[styles.btn, { backgroundColor: "#ef4444", marginTop: 8 }]}
+        onPress={del}
+      >
+      <Text style={styles.btnTxt}>Eliminar</Text>
       </TouchableOpacity>
+      )}
+
     </ScrollView>
   );
 }
@@ -234,4 +350,9 @@ const styles = StyleSheet.create({
   btn:{ borderRadius:12, paddingVertical:14, alignItems:"center" },
   btnSecondary:{ borderRadius:12, paddingVertical:12, alignItems:"center", backgroundColor:"#1e293b", marginTop:8 },
   btnTxt:{ color:"#fff", fontWeight:"700" },
+
+  chip:{ paddingVertical:8, paddingHorizontal:12, borderRadius:10, backgroundColor:"#111827", marginBottom:8, borderWidth:1, borderColor:"#1f2937" },
+  chipActive:{ backgroundColor:"#1e293b", borderColor:"#3b82f6" },
+  chipText:{ color:"#cbd5e1" },
+  chipTextActive:{ color:"#93c5fd", fontWeight:"700" },
 });
