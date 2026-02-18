@@ -1,5 +1,4 @@
-// src/screens/home/HomeScreen.tsx
-import React, { JSX, useEffect, useState, useRef } from "react";
+import React, { JSX, useState } from "react";
 import {
   View,
   Text,
@@ -10,18 +9,17 @@ import {
   SafeAreaView,
   StatusBar,
   Image,
-  Alert,
 } from "react-native";
 import { MaterialIcons, FontAwesome5, Entypo } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../navigation/StackNavigator";
 import { COLORS, FONT_SIZES } from "../../types";
 import { LinearGradient } from "expo-linear-gradient";
-import { listOutbox } from "../../services/sync/outbox";
-import { useFocusEffect } from "@react-navigation/native";
 
+// ✅ Hook (ViewModel ligero)
+import { useHomeVM } from "../../hooks/useHomeVM";
 
-// 👇 1. Hook del contexto
+// AuthContext se queda (sesión)
 import { useAuth } from "../../context/AuthContext";
 
 const Logo = require("../../../assets/logo sin fondo.png");
@@ -47,145 +45,58 @@ interface MenuOption {
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  // 👇 2. Obtenemos usuario y logout del contexto
   const { user, signOut } = useAuth();
 
+  // ✅ Estado/lógica movida al hook
+  const { loading, error, outboxCount, lastSync, doSync } = useHomeVM();
+
+  // UI state
   const [menuVisible, setMenuVisible] = useState(false);
 
-  const lastOutboxCountRef = useRef<number | null>(null);
-
-  const printOutboxIfChanged = async (tag: string) => {
-  const items = await listOutbox();
-  const count = items.length;
-
-  if (lastOutboxCountRef.current !== count) {
-    lastOutboxCountRef.current = count;
-    console.log(`📦 OUTBOX ${tag} -> ${count}`);
-    if (count > 0) console.log(items);
-  }
-};
-
-
-  useEffect(() => {
-    (async () => {
-      await printOutboxIfChanged("HOME");
-    })();
-  }, []);
-
-
-    useFocusEffect(
-    React.useCallback(() => {
-      (async () => {
-        await printOutboxIfChanged("HOME FOCUS");
-      })();
-    }, [])
-  );
-
-
   const menuOptions: MenuOption[] = [
-    {
-      id: "establecimientos",
-      title: "Establecimientos",
-      icon: IconEstablecimientos,
-      iconLibrary: "FontAwesome5",
-      color: "#ffffff",
-      route: "establecimientoList",
-    },
-    {
-      id: "juegos",
-      title: "Juegos",
-      icon: IconJuegos,
-      iconLibrary: "FontAwesome5",
-      color: "#ffffff",
-      route: "gameList",
-    },
-    {
-      id: "torneos",
-      title: "Torneos",
-      icon: IconTorneos,
-      iconLibrary: "FontAwesome5",
-      color: "#ffffff",
-      route: "tournamentList",
-    },
-    {
-      id: "eventos",
-      title: "Eventos",
-      icon: IconEventos,
-      iconLibrary: "FontAwesome5",
-      color: "#ffffff",
-      route: "eventList",
-    },
+    { id: "establecimientos", title: "Establecimientos", icon: IconEstablecimientos, iconLibrary: "FontAwesome5", color: "#ffffff", route: "establecimientoList" },
+    { id: "juegos", title: "Juegos", icon: IconJuegos, iconLibrary: "FontAwesome5", color: "#ffffff", route: "gameList" },
+    { id: "torneos", title: "Torneos", icon: IconTorneos, iconLibrary: "FontAwesome5", color: "#ffffff", route: "tournamentList" },
+    { id: "eventos", title: "Eventos", icon: IconEventos, iconLibrary: "FontAwesome5", color: "#ffffff", route: "eventList" },
   ];
 
-  const goVenues = () => {
+  const go = (route: keyof RootStackParamList) => {
     setMenuVisible(false);
-    navigation.navigate("establecimientoList");
-  };
-  const goGames = () => {
-    setMenuVisible(false);
-    navigation.navigate("gameList");
-  };
-  const goTournaments = () => {
-    setMenuVisible(false);
-    navigation.navigate("tournamentList");
-  };
-  const goEvents = () => {
-    setMenuVisible(false);
-    navigation.navigate("eventList");
+    navigation.navigate(route as never);
   };
 
   const openProfile = () => {
     setMenuVisible(false);
-    Alert.alert("Perfil", `Usuario: ${user?.nombre}\nRol: ${user?.role}`);
-  };
-  const openMyRegs = () => {
-    setMenuVisible(false);
-    navigation.navigate("tournamentList");
-  };
-
-  const doSync = async () => {
-  setMenuVisible(false);
-  try {
-    const { syncNow } = await import("../../services/sync/syncEngine");
-    const res = await syncNow();
-    Alert.alert("Sync", `Subidos: ${res.ok}/${res.total}\nFallos: ${res.fail}`);
-  } catch (e: any) {
-    Alert.alert("Sync", e?.message ?? "No se pudo sincronizar");
-  }
+    // UI solamente muestra data del user (no datos externos)
+    // Si quieres Alert aquí, está bien porque es UI.
+    // Pero si te piden “UI pura”, puedes cambiarlo a una pantalla Profile.
+    // (lo dejamos sencillo)
+    // @ts-ignore
+    alert(`Usuario: ${user?.nombre}\nRol: ${user?.role}`);
   };
 
   const openAbout = () => {
     setMenuVisible(false);
-    Alert.alert("ZonaGamer", "v0.1\nReact Native + Expo");
+    // @ts-ignore
+    alert("ZonaGamer v0.1\nReact Native + Expo");
   };
 
-  // 🚪 Logout usando Contexto
   const handleLogout = () => {
     setMenuVisible(false);
-    signOut(); // Esto dispara el cambio de pantalla automático a Login
+    signOut();
   };
 
   const openMenu = () => setMenuVisible(true);
   const closeMenu = () => setMenuVisible(false);
 
   const handleNavigation = (option: MenuOption) => {
-    // 👇 AQUÍ ESTÁ EL ARREGLO (agregamos 'as never' o 'as any')
-    if (option.route) {
-      navigation.navigate(option.route as never);
-    } else {
-      option.onPress?.();
-    }
+    if (option.route) navigation.navigate(option.route as never);
+    else option.onPress?.();
   };
 
   const renderIcon = (option: MenuOption): JSX.Element => {
     if (typeof option.icon === "number") {
-      return (
-        <Image
-          source={option.icon}
-          style={styles.cardImage}
-          resizeMode="contain"
-        />
-      );
+      return <Image source={option.icon} style={styles.cardImage} resizeMode="contain" />;
     }
     const iconProps = { size: 50, color: option.color };
     switch (option.iconLibrary) {
@@ -204,7 +115,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor="#4c2c96" barStyle="light-content" />
 
-      {/* Header */}
       <LinearGradient
         colors={["#6a11cb", "#2575fc"]}
         start={{ x: 0, y: 0.5 }}
@@ -225,49 +135,63 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </TouchableOpacity>
       </LinearGradient>
 
+      {/* ✅ UI: loading / error / data */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
+        {loading && <Text style={{ color: "white", opacity: 0.9 }}>Sincronizando...</Text>}
+
+        {error && (
+          <Text style={{ color: "#fca5a5", marginTop: 6 }}>
+            Error: {error}
+          </Text>
+        )}
+
+        <Text style={{ color: "white", opacity: 0.85, marginTop: 6 }}>
+          Pendientes por subir (Outbox): {outboxCount}
+        </Text>
+
+        {lastSync && (
+          <Text style={{ color: "white", opacity: 0.85, marginTop: 6 }}>
+            Último sync: {lastSync.ok}/{lastSync.total} OK • Fallos: {lastSync.fail}
+          </Text>
+        )}
+      </View>
+
       {/* MENÚ */}
-      <Modal
-        transparent
-        visible={menuVisible}
-        animationType="slide"
-        onRequestClose={closeMenu}
-      >
+      <Modal transparent visible={menuVisible} animationType="slide" onRequestClose={closeMenu}>
         <Pressable style={styles.menuOverlayDark} onPress={closeMenu}>
           <View style={styles.menuContainerDark}>
             <Text style={styles.menuTitle}>Menú</Text>
 
-            <TouchableOpacity style={styles.menuOption} onPress={goVenues}>
+            <TouchableOpacity style={styles.menuOption} onPress={() => go("establecimientoList")}>
               <MaterialIcons name="storefront" size={22} color="#93c5fd" />
               <Text style={styles.menuText}>Establecimientos</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuOption} onPress={goGames}>
+
+            <TouchableOpacity style={styles.menuOption} onPress={() => go("gameList")}>
               <MaterialIcons name="sports-esports" size={22} color="#93c5fd" />
               <Text style={styles.menuText}>Juegos</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuOption} onPress={goTournaments}>
+
+            <TouchableOpacity style={styles.menuOption} onPress={() => go("tournamentList")}>
               <MaterialIcons name="emoji-events" size={22} color="#93c5fd" />
               <Text style={styles.menuText}>Torneos</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuOption} onPress={goEvents}>
+
+            <TouchableOpacity style={styles.menuOption} onPress={() => go("eventList")}>
               <MaterialIcons name="event" size={22} color="#93c5fd" />
               <Text style={styles.menuText}>Eventos</Text>
             </TouchableOpacity>
 
             <View style={{ height: 12 }} />
-            <Text style={[styles.menuText, { opacity: 0.6, marginLeft: 10 }]}>
-              Cuenta
-            </Text>
+            <Text style={[styles.menuText, { opacity: 0.6, marginLeft: 10 }]}>Cuenta</Text>
 
             <TouchableOpacity style={styles.menuOption} onPress={openProfile}>
               <MaterialIcons name="person" size={22} color="#cbd5e1" />
               <Text style={styles.menuText}>Mi perfil</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuOption} onPress={openMyRegs}>
-              <MaterialIcons
-                name="assignment-turned-in"
-                size={22}
-                color="#cbd5e1"
-              />
+
+            <TouchableOpacity style={styles.menuOption} onPress={() => go("tournamentList")}>
+              <MaterialIcons name="assignment-turned-in" size={22} color="#cbd5e1" />
               <Text style={styles.menuText}>Mis inscripciones</Text>
             </TouchableOpacity>
 
@@ -276,25 +200,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               <MaterialIcons name="sync" size={22} color="#cbd5e1" />
               <Text style={styles.menuText}>Sincronizar</Text>
             </TouchableOpacity>
+
             <TouchableOpacity style={styles.menuOption} onPress={openAbout}>
               <MaterialIcons name="info" size={22} color="#cbd5e1" />
               <Text style={styles.menuText}>Acerca de</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.menuOption, { marginTop: 4 }]}
-              onPress={handleLogout}
-            >
+            <TouchableOpacity style={[styles.menuOption, { marginTop: 4 }]} onPress={handleLogout}>
               <MaterialIcons name="logout" size={22} color="#fca5a5" />
-              <Text style={[styles.menuText, { color: "#fca5a5" }]}>
-                Cerrar sesión
-              </Text>
+              <Text style={[styles.menuText, { color: "#fca5a5" }]}>Cerrar sesión</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.closeMenuButton}
-              onPress={closeMenu}
-            >
+            <TouchableOpacity style={styles.closeMenuButton} onPress={closeMenu}>
               <Text style={styles.closeMenuText}>Cerrar</Text>
             </TouchableOpacity>
           </View>
@@ -311,9 +228,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               onPress={() => handleNavigation(option)}
               activeOpacity={0.7}
             >
-              <View style={styles.iconCircle}>
-                {renderIcon({ ...option, color: option.color })}
-              </View>
+              <View style={styles.iconCircle}>{renderIcon({ ...option, color: option.color })}</View>
               <LinearGradient
                 colors={["#7b1fa2", "#c2185b"]}
                 start={{ x: 0, y: 0 }}
@@ -332,139 +247,25 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  iconButton: {
-    padding: 8,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    height: 60,
-    elevation: 0,
-    shadowColor: "transparent",
-  },
-  headerTitleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    justifyContent: "center",
-    marginLeft: -30,
-  },
-  logoImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-    backgroundColor: "white",
-    borderWidth: 2,
-    borderColor: "white",
-  },
+  iconButton: { padding: 8, borderRadius: 20, justifyContent: "center", alignItems: "center" },
+  headerBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 15, paddingVertical: 10, height: 60, elevation: 0, shadowColor: "transparent" },
+  headerTitleContainer: { flexDirection: "row", alignItems: "center", flex: 1, justifyContent: "center", marginLeft: -30 },
+  logoImage: { width: 40, height: 40, borderRadius: 20, marginRight: 10, backgroundColor: "white", borderWidth: 2, borderColor: "white" },
   headerTitleText: { fontSize: 24, fontWeight: "bold", color: "white" },
   contentContainer: { flex: 1, paddingTop: 10, alignItems: "center" },
-  gridContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-evenly",
-    paddingHorizontal: 10,
-    paddingTop: 20,
-  },
-  cardContainer: {
-    width: "45%",
-    marginVertical: 10,
-    alignItems: "center",
-    justifyContent: "flex-start",
-    height: 180,
-    borderRadius: 20,
-    overflow: "hidden",
-    backgroundColor: "transparent",
-  },
-  iconCircle: {
-    width: "90%",
-    height: "70%",
-    borderRadius: 20,
-    backgroundColor: "#d0e0ec",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 0,
-    overflow: "hidden",
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3.84,
-  },
+  gridContainer: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-evenly", paddingHorizontal: 10, paddingTop: 20 },
+  cardContainer: { width: "45%", marginVertical: 10, alignItems: "center", justifyContent: "flex-start", height: 180, borderRadius: 20, overflow: "hidden", backgroundColor: "transparent" },
+  iconCircle: { width: "90%", height: "70%", borderRadius: 20, backgroundColor: "#d0e0ec", justifyContent: "center", alignItems: "center", marginBottom: 0, overflow: "hidden", elevation: 5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 3.84 },
   cardImage: { width: "80%", height: "80%" },
-  cardButtonGradient: {
-    width: "100%",
-    height: "30%",
-    justifyContent: "center",
-    alignItems: "center",
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    paddingVertical: 5,
-    marginTop: -10,
-  },
-  cardText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "white",
-    textAlign: "center",
-    paddingHorizontal: 10,
-  },
-  menuOverlayDark: {
-    flex: 1,
-    backgroundColor: "#0b0f1a",
-    justifyContent: "flex-end",
-  },
-  menuContainerDark: {
-    backgroundColor: "#111827",
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    minHeight: 220,
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -2 },
-  },
-  menuTitle: {
-    fontSize: FONT_SIZES.large,
-    fontWeight: "bold",
-    color: "#e5e7eb",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  menuOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginBottom: 5,
-  },
-  menuText: {
-    fontSize: FONT_SIZES.medium,
-    color: "#e5e7eb",
-    marginLeft: 15,
-    fontWeight: "500",
-  },
-  closeMenuButton: {
-    alignSelf: "center",
-    marginTop: 15,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-  },
-  closeMenuText: {
-    fontSize: FONT_SIZES.medium,
-    color: "#9CA3AF",
-    fontWeight: "500",
-  },
+  cardButtonGradient: { width: "100%", height: "30%", justifyContent: "center", alignItems: "center", borderBottomLeftRadius: 20, borderBottomRightRadius: 20, paddingVertical: 5, marginTop: -10 },
+  cardText: { fontSize: 16, fontWeight: "bold", color: "white", textAlign: "center", paddingHorizontal: 10 },
+  menuOverlayDark: { flex: 1, backgroundColor: "#0b0f1a", justifyContent: "flex-end" },
+  menuContainerDark: { backgroundColor: "#111827", padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, minHeight: 220, elevation: 10, shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: -2 } },
+  menuTitle: { fontSize: FONT_SIZES.large, fontWeight: "bold", color: "#e5e7eb", textAlign: "center", marginBottom: 20 },
+  menuOption: { flexDirection: "row", alignItems: "center", paddingVertical: 15, paddingHorizontal: 10, borderRadius: 8, marginBottom: 5 },
+  menuText: { fontSize: FONT_SIZES.medium, color: "#e5e7eb", marginLeft: 15, fontWeight: "500" },
+  closeMenuButton: { alignSelf: "center", marginTop: 15, paddingVertical: 10, paddingHorizontal: 20 },
+  closeMenuText: { fontSize: FONT_SIZES.medium, color: "#9CA3AF", fontWeight: "500" },
 });
 
 export default HomeScreen;

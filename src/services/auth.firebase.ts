@@ -18,7 +18,7 @@ type RegisterInput = {
 
 function mapProfileToUser(profile: any): User {
   return {
-    id: 0, // tu app usa id num local; aquí no es crítico
+    id: 0, // app usa id num local; aquí no es crítico
     nombre: profile?.nombre ?? "Usuario",
     email: profile?.email ?? "",
     role: profile?.role ?? "user",
