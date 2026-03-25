@@ -279,6 +279,6 @@ export async function register(id: number, nickOrEmail: string): Promise<Event> 
   return ev;
 }
 
- 
+ // --- funciones internas para sync (no las exportamos) ---
 
 
