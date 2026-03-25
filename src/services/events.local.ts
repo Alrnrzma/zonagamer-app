@@ -46,6 +46,15 @@ type DbRow = {
   syncStatus: string;
 };
 
+type AttendanceRow = {
+  id: string;
+  eventId: string;
+  userId: string;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 const now = () => Date.now();
 
 function parseRow(row: DbRow): Event {
@@ -56,6 +65,10 @@ function parseRow(row: DbRow): Event {
     updatedAt: row.updatedAt,
     deleted: row.deleted === 1,
   };
+}
+
+function attendanceId(eventId: number, userId: string): string {
+  return `${eventId}_${userId.trim().toLowerCase()}`;
 }
 
 // --- meta helpers (para secuencias) ---
@@ -181,27 +194,91 @@ export async function remove(id: number): Promise<void> {
 
 }
 
+export async function isUserAttending(eventId: number, userId: string): Promise<boolean> {
+  const normalizedUserId = userId.trim().toLowerCase();
+  if (!normalizedUserId) return false;
+
+  const row = await first<AttendanceRow>(
+    `SELECT * FROM event_attendees
+     WHERE eventId = ? AND userId = ? AND status = 'going'
+     LIMIT 1`,
+    [String(eventId), normalizedUserId]
+  );
+
+  return !!row;
+}
+
+export async function countAttendance(eventId: number): Promise<number> {
+  const row = await first<{ c: number }>(
+    `SELECT COUNT(*) as c
+     FROM event_attendees
+     WHERE eventId = ? AND status = 'going'`,
+    [String(eventId)]
+  );
+
+  return row?.c ?? 0;
+}
+
+export async function confirmAttendance(eventId: number, userId: string): Promise<void> {
+  const ev = await getById(eventId);
+  if (!ev) throw new Error("Evento no encontrado");
+
+  const normalizedUserId = userId.trim().toLowerCase();
+  if (!normalizedUserId) throw new Error("Usuario inválido");
+
+  const alreadyGoing = await isUserAttending(eventId, normalizedUserId);
+  if (alreadyGoing) return;
+
+  if (ev.capacity) {
+    const currentCount = await countAttendance(eventId);
+    if (currentCount >= ev.capacity) {
+      throw new Error("Evento lleno");
+    }
+  }
+
+  const ts = now();
+  const id = attendanceId(eventId, normalizedUserId);
+
+  await run(
+    `INSERT INTO event_attendees (id, eventId, userId, status, createdAt, updatedAt)
+     VALUES (?, ?, ?, 'going', ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       status = 'going',
+       updatedAt = excluded.updatedAt`,
+    [id, String(eventId), normalizedUserId, ts, ts]
+  );
+}
+
+export async function cancelAttendance(eventId: number, userId: string): Promise<void> {
+  const normalizedUserId = userId.trim().toLowerCase();
+  if (!normalizedUserId) throw new Error("Usuario inválido");
+
+  const existing = await first<AttendanceRow>(
+    `SELECT * FROM event_attendees
+     WHERE eventId = ? AND userId = ?
+     LIMIT 1`,
+    [String(eventId), normalizedUserId]
+  );
+
+  if (!existing) return;
+
+  await run(
+    `UPDATE event_attendees
+     SET status = 'cancelled', updatedAt = ?
+     WHERE eventId = ? AND userId = ?`,
+    [now(), String(eventId), normalizedUserId]
+  );
+}
+
 export async function register(id: number, nickOrEmail: string): Promise<Event> {
+  await confirmAttendance(id, nickOrEmail);
+
   const ev = await getById(id);
   if (!ev) throw new Error("Evento no encontrado");
 
-  const nick = nickOrEmail.trim();
-  if (!nick) throw new Error("Nick vacío");
-
-  const attendees = ev.attendees ?? [];
-  if (ev.capacity && attendees.length >= ev.capacity) {
-    throw new Error("Evento lleno");
-  }
-  if (attendees.includes(nick)) {
-    // ya registrado, no hacemos nada
-    return ev;
-  }
-
-  const updated = await update(id, {
-    attendees: [...attendees, nick],
-  });
-
-
-  return updated;
+  return ev;
 }
+
+ 
+
 

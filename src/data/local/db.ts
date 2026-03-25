@@ -48,6 +48,24 @@ export async function initDb(): Promise<void> {
       syncStatus TEXT NOT NULL DEFAULT 'synced'
     );
 
+    CREATE TABLE IF NOT EXISTS event_attendees (
+      id TEXT PRIMARY KEY NOT NULL,
+      eventId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'going',
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_event_attendees_unique
+    ON event_attendees(eventId, userId);
+
+    CREATE INDEX IF NOT EXISTS idx_event_attendees_eventId
+    ON event_attendees(eventId);
+
+    CREATE INDEX IF NOT EXISTS idx_event_attendees_userId
+    ON event_attendees(userId);
+
     CREATE TABLE IF NOT EXISTS games (
       id TEXT PRIMARY KEY NOT NULL,
       data TEXT NOT NULL,
