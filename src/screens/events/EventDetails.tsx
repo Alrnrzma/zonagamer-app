@@ -22,25 +22,51 @@ export default function EventDetails({ route, navigation }: Props) {
   const [venues, setVenues] = useState<number[]>([]);
   const [price, setPrice] = useState("Gratis"); const [promo, setPromo] = useState("");
   const [capacity, setCapacity] = useState<string>("");
-  const [nick, setNick] = useState("");
+  // para registro de asistencia
+  const [attending, setAttending] = useState(false);
+  const [attendanceCount, setAttendanceCount] = useState(0);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
 
   const [gameIdx, setGameIdx] = useState<{ id:number; title:string }[]>([]);
   const [estIdx,  setEstIdx]  = useState<{ id:number; nombre:string }[]>([]);
 
+
+  const CURRENT_USER_ID = "demo@zonagamer.com";
+
+  const loadAttendance = async () => {
+    const isGoing = await eSvc.isUserAttending(id, CURRENT_USER_ID);
+    const total = await eSvc.countAttendance(id);
+
+    setAttending(isGoing);
+    setAttendanceCount(total);
+  };
+
+  // --- carga de datos inicial ---
   useEffect(() => {
-    (async () => {
-      setGameIdx((await gamesSvc.list()).map(g => ({ id:g.id, title:g.title })));
-      setEstIdx((await estSvc.list()).map(e => ({ id:e.id, nombre:e.nombre })));
-      const found = (await eSvc.list()).find(x => x.id === id) ?? null;
-      setEv(found);
-      if (found) {
-        setTitle(found.title); setCoverUri(found.coverUri); setType(found.type);
-        setDescription(found.description ?? ""); setDate(found.date ?? ""); setTime(found.time ?? ""); setEndTime(found.endTime ?? "");
-        setGameId(found.gameId); setVenues(found.venues ?? []); setPrice(found.price ?? "Gratis"); setPromo(found.promo ?? "");
-        setCapacity(found.capacity ? String(found.capacity) : "");
-      }
-    })();
-  }, [id]);
+  (async () => {
+    setGameIdx((await gamesSvc.list()).map(g => ({ id:g.id, title:g.title })));
+    setEstIdx((await estSvc.list()).map(e => ({ id:e.id, nombre:e.nombre })));
+    const found = (await eSvc.list()).find(x => x.id === id) ?? null;
+    setEv(found);
+
+    if (found) {
+      setTitle(found.title);
+      setCoverUri(found.coverUri);
+      setType(found.type);
+      setDescription(found.description ?? "");
+      setDate(found.date ?? "");
+      setTime(found.time ?? "");
+      setEndTime(found.endTime ?? "");
+      setGameId(found.gameId);
+      setVenues(found.venues ?? []);
+      setPrice(found.price ?? "Gratis");
+      setPromo(found.promo ?? "");
+      setCapacity(found.capacity ? String(found.capacity) : "");
+    }
+
+    await loadAttendance();
+  })();
+}, [id]);
 
   const pickCover = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -72,15 +98,28 @@ export default function EventDetails({ route, navigation }: Props) {
     ]);
   };
 
-  const doRegister = async () => {
-    if (!nick.trim()) return Alert.alert("Falta nombre", "Escribe tu nick/correo para registrar.");
-    try {
-      const upd = await eSvc.register(id, nick.trim());
-      if (upd) { setEv(upd); Alert.alert("Registrado"); setNick(""); }
-    } catch (e:any) {
-      Alert.alert("No se pudo registrar", e?.message ?? "Intenta más tarde");
+  // --- funciones para registro de asistencia ---
+  const toggleAttendance = async () => {
+  try {
+    setLoadingAttendance(true);
+
+    if (attending) {
+      await eSvc.cancelAttendance(id, CURRENT_USER_ID);
+      setAttending(false);
+      setAttendanceCount(prev => Math.max(0, prev - 1));
+      Alert.alert("Asistencia cancelada");
+    } else {
+      await eSvc.confirmAttendance(id, CURRENT_USER_ID);
+      setAttending(true);
+      setAttendanceCount(prev => prev + 1);
+      Alert.alert("Asistencia confirmada");
     }
-  };
+  } catch (e: any) {
+    Alert.alert("No se pudo actualizar", e?.message ?? "Intenta más tarde");
+  } finally {
+    setLoadingAttendance(false);
+  }
+};
 
   const TYPES: eSvc.EventType[] = ["ThemeNight","Launch","WatchParty","Promo","Workshop","CasualBracket","Community"];
 
@@ -157,20 +196,33 @@ export default function EventDetails({ route, navigation }: Props) {
       <TouchableOpacity style={[styles.btn, { marginTop: 16 }]} onPress={save}><Text style={styles.btnTxt}>Guardar</Text></TouchableOpacity>
       <TouchableOpacity style={[styles.btn, { backgroundColor:"#ef4444", marginTop:8 }]} onPress={del}><Text style={styles.btnTxt}>Eliminar</Text></TouchableOpacity>
 
-      <Text style={[styles.label, { marginTop: 16 }]}>Registrarme</Text>
-      <View style={{ flexDirection:"row", gap:8 }}>
-        <TextInput style={[styles.input, { flex:1 }]} placeholder="Tu nick o email" placeholderTextColor="#9CA3AF" value={nick} onChangeText={setNick} />
-        <TouchableOpacity style={[styles.btn, { paddingVertical:12, paddingHorizontal:16 }]} onPress={doRegister}>
-          <Text style={styles.btnTxt}>Ok</Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={[styles.label, { marginTop: 16 }]}>Asistencia</Text>
 
-      {!!ev.attendees?.length && (
-        <>
-          <Text style={[styles.label, { marginTop: 12 }]}>Asistentes ({ev.attendees.length}{ev.capacity?`/${ev.capacity}`:""})</Text>
-          {ev.attendees.map(p => <Text key={p} style={{ color:"#cbd5e1", marginTop:4 }}>• {p}</Text>)}
-        </>
-      )}
+
+      <Text style={{ color:"#cbd5e1", marginBottom: 8 }}>
+  Asistentes: {attendanceCount}{capacity ? ` / ${capacity}` : ""}
+</Text>
+{/* Botón para confirmar/cancelar asistencia */}
+<TouchableOpacity
+  style={[
+    styles.btn,
+    {
+      marginTop: 4,
+      backgroundColor: attending ? "#ef4444" : "#22c55e",
+      opacity: loadingAttendance ? 0.7 : 1,
+    }
+  ]}
+  onPress={toggleAttendance}
+  disabled={loadingAttendance}
+>
+  <Text style={styles.btnTxt}>
+    {loadingAttendance
+      ? "Procesando..."
+      : attending
+        ? "Cancelar asistencia"
+        : "Confirmar asistencia"}
+  </Text>
+</TouchableOpacity>
     </ScrollView>
   );
 }

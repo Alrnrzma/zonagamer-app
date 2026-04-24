@@ -12,7 +12,7 @@ export type ID = number;
 // ==========================================
 // AUTENTICACIÓN Y PERMISOS
 // ==========================================
-export type Role = "admin" | "user";
+export type Role = "admin" | "user" | "associated";
 
 export type AppAction =
   | "venue:create" | "venue:update" | "venue:delete"
@@ -26,7 +26,7 @@ export type User = {
   nombre: string;
   email: string;
   telefono?: string;
-  role: Role;                      // admin | user
+  role: Role;                      // admin | user | associated
   status: "active" | "disabled";
   createdAt: string;               // ISO string
 };

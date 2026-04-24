@@ -18,7 +18,7 @@ export type Event = {
   coverUri?: string;
   type: EventType;
   description?: string;
-  attendees?: string[];
+  
 
   date?: string;     // "YYYY-MM-DD"
   time?: string;     // "HH:mm"
@@ -141,7 +141,6 @@ export async function create(input: Omit<Event, "id">): Promise<Event> {
     ...input,
     id,
     venues: input.venues ?? [],
-    attendees: input.attendees ?? [],
     createdAt: ts,
     updatedAt: ts,
   };
