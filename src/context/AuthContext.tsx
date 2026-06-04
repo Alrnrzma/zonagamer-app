@@ -6,7 +6,12 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
 
 // cache local (recomendado)
-import { setCurrentUser, logout as localLogout } from "../services/auth.local";
+import {
+  setCurrentUser,
+  getCurrentUser,
+  logout as localLogout,
+  ensureDemoUsers,
+} from "../services/auth.local";
 
 // Tu tipo local
 import { User } from "../types";
@@ -30,44 +35,88 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // ✅ Fuente de verdad: Firebase Auth
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (fbUser) => {
+    let mounted = true;
+
+    const boot = async () => {
       try {
-        if (!fbUser) {
-          setUser(null);
-          return;
+        // ✅ Crea usuarios demo locales si no existen
+        await ensureDemoUsers();
+
+        // ✅ Primero intenta cargar sesión local
+        const localUser = await getCurrentUser();
+
+        if (localUser && mounted) {
+          setUser(localUser);
         }
 
-        // ✅ Trae perfil desde Firestore: users/{uid}
-        const snap = await getDoc(doc(db, "users", fbUser.uid));
-        if (!snap.exists()) {
-          // Si no existe perfil, lo tratamos como no autorizado
-          setUser(null);
-          return;
-        }
+        // ✅ Luego escucha Firebase si hay sesión online
+        const unsub = onAuthStateChanged(auth, async (fbUser) => {
+          try {
+            if (!fbUser) {
+              // Si ya hay usuario local, NO lo borramos.
+              // Esto permite abrir la app sin internet.
+              if (!localUser && mounted) {
+                setUser(null);
+              }
+              return;
+            }
 
-        const profile = snap.data() as any;
+            const snap = await getDoc(doc(db, "users", fbUser.uid));
 
-        // ✅ Mapea a tu tipo User local
-        const mapped: User = {
-          id: 0, // Firebase usa uid string; aquí no importa si tu app no usa id num
-          nombre: profile.nombre ?? "Usuario",
-          email: profile.email ?? fbUser.email ?? "",
-          role: profile.role ?? "user",
-          status: profile.status ?? "active",
-        } as any;
+            if (!snap.exists()) {
+              if (!localUser && mounted) {
+                setUser(null);
+              }
+              return;
+            }
 
-        setUser(mapped);
+            const profile = snap.data() as any;
 
-        // ✅ Cache local
-        await setCurrentUser(mapped);
+            const mapped: User = {
+              id: 0,
+              nombre: profile.nombre ?? "Usuario",
+              email: profile.email ?? fbUser.email ?? "",
+              role: profile.role ?? "user",
+              status: profile.status ?? "active",
+            } as any;
+
+            if (mounted) {
+              setUser(mapped);
+            }
+
+            // ✅ Guarda copia local para uso offline
+            await setCurrentUser(mapped);
+          } catch (e) {
+            // Si Firebase falla pero hay usuario local, mantenemos sesión local
+            if (!localUser && mounted) {
+              setUser(null);
+            }
+          } finally {
+            if (mounted) {
+              setIsLoading(false);
+            }
+          }
+        });
+
+        return unsub;
       } catch (e) {
-        setUser(null);
-      } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setUser(null);
+          setIsLoading(false);
+        }
       }
+    };
+
+    let unsub: undefined | (() => void);
+
+    boot().then((u) => {
+      unsub = u;
     });
 
-    return () => unsub();
+    return () => {
+      mounted = false;
+      if (unsub) unsub();
+    };
   }, []);
 
   // ✅ Útil cuando Login/Register ya obtuvieron el usuario y quieres evitar “parpadeos”
@@ -77,13 +126,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signOut = async () => {
-    // 🔥 cierra sesión Firebase
-    const { logoutFirebase } = await import("../services/auth.firebase");
-    await logoutFirebase();
+    try {
+      const { logoutFirebase } = await import("../services/auth.firebase");
+      await logoutFirebase();
+    } catch (e) {
+      console.log("No se pudo cerrar Firebase, cerrando local:", e);
+    }
 
-    // 🧹 limpia cache local
     await localLogout();
-
     setUser(null);
   };
 

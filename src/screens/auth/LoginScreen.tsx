@@ -14,6 +14,8 @@ import {
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../navigation/StackNavigator";
 import { loginFirebase } from "../../services/auth.firebase"; 
+import { useAuth } from "../../context/AuthContext";
+import { login as loginLocal, ensureDemoUsers } from "../../services/auth.local";
 
 // ⚠️ desde screens/auth -> ../../types
 import { LoginFormData, COLORS, FONT_SIZES } from "../../types";
@@ -37,6 +39,7 @@ interface LoginScreenProps {
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   // 👇 Usamos el hook para obtener la función signIn
+  const { signIn } = useAuth();
 
   // Form
   const [formData, setFormData] = useState<LoginFormData>({
@@ -75,25 +78,50 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
 
  const authenticateUser = async (): Promise<void> => {
-  try {
-    setIsLoading(true);
+    try {
+      setIsLoading(true);
 
-    const email = formData.username.trim().toLowerCase();
-    const password = formData.password;
-    
+      const email = formData.username.trim().toLowerCase();
+      const password = formData.password;
 
-    // 🔥 Login con Firebase (y valida perfil en Firestore)
-    await loginFirebase(email, password);
+      await ensureDemoUsers();
 
-  } catch (err: any) {
-    Alert.alert(
-      "No se pudo iniciar sesión",
-      err?.message ?? "Inténtalo de nuevo."
-    );
-  } finally {
-    setIsLoading(false);
-  }
-};
+      try {
+        // ✅ Intento online con Firebase
+        await loginFirebase(email, password);
+
+        // AuthContext detectará Firebase y entrará solo
+        return;
+      } catch (firebaseError: any) {
+        console.log("Login Firebase falló, intentando login local:", firebaseError);
+
+        // ✅ Fallback offline/local
+        const localUser = await loginLocal(email, password);
+
+        if (!localUser) {
+          Alert.alert(
+            "No se pudo iniciar sesión",
+            "No hay conexión o tus datos no existen localmente."
+          );
+          return;
+        }
+
+        await signIn(localUser);
+
+        Alert.alert(
+          "Modo offline",
+          "Iniciaste sesión con datos guardados localmente."
+        );
+      }
+    } catch (err: any) {
+      Alert.alert(
+        "No se pudo iniciar sesión",
+        err?.message ?? "Inténtalo de nuevo."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
 
   const handleForgotPassword = (): void => {

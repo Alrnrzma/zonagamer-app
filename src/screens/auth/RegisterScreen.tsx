@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 // 👇 helpers de sesión local y tipos
 import { registerFirebase } from "../../services/auth.firebase";
 import { Role } from "../../types";
+import { upsertUser } from "../../services/auth.local";
 
 // ✅ IMPORTANTE: Importamos el hook del contexto
 import { useAuth } from "../../context/AuthContext";
@@ -58,28 +59,48 @@ export default function RegisterScreen({ navigation }: Props) {
 
   // crea el usuario en firebase auth + firestore + local y loguea
   const handleRegister = async () => {
-  if (!formValid) return;
+    if (!formValid) return;
 
-  setLoading(true);
-  try {
-    const created = await registerFirebase({
+    setLoading(true);
+
+    const payload = {
       nombre: nombre.trim(),
       email: email.trim().toLowerCase(),
       password,
       telefono: telefono.trim() || undefined,
-      role, // si quieres permitirlo (si no, puedes forzarlo a "user")
-    });
+      role,
+    };
 
-    // ✅ actualiza contexto y entra al Home
-    await signIn(created);
+    try {
+      try {
+        // ✅ Registro online con Firebase
+        const created = await registerFirebase(payload);
 
-    Alert.alert("Cuenta creada", "Tu registro fue exitoso.");
-  } catch (err: any) {
-    Alert.alert("No se pudo registrar", err?.message ?? "Inténtalo de nuevo.");
-  } finally {
-    setLoading(false);
-  }
-};
+        await signIn(created);
+
+        Alert.alert("Cuenta creada", "Tu registro fue exitoso.");
+      } catch (firebaseError: any) {
+        console.log("Registro Firebase falló, creando usuario local:", firebaseError);
+
+        // ✅ Registro local si no hay internet
+        const created = await upsertUser({
+          ...payload,
+          status: "active",
+        });
+
+        await signIn(created);
+
+        Alert.alert(
+          "Cuenta local creada",
+          "No hubo conexión con Firebase. Tu cuenta se guardó localmente."
+        );
+      }
+    } catch (err: any) {
+      Alert.alert("No se pudo registrar", err?.message ?? "Inténtalo de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
 
