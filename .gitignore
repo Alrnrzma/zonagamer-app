@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+#Esto evita que se suban archivos temporales de Python.
+backend/__pycache__/
+*.pyc
