@@ -6,6 +6,7 @@ import * as eSvc from "../../services/events.local";
 import * as gamesSvc from "../../services/games.local";
 import * as estSvc from "../../services/establecimientos.local";
 import * as ImagePicker from "expo-image-picker";
+import { useAuth } from "../../context/AuthContext";
 
 type Props = StackScreenProps<RootStackParamList, "eventDetails">;
 
@@ -29,6 +30,10 @@ export default function EventDetails({ route, navigation }: Props) {
 
   const [gameIdx, setGameIdx] = useState<{ id:number; title:string }[]>([]);
   const [estIdx,  setEstIdx]  = useState<{ id:number; nombre:string }[]>([]);
+
+  const { user } = useAuth();
+  const role = String(user?.role ?? "").toLowerCase();
+  const isAdmin = role === "admin" || role === "administrador";
 
 
   const CURRENT_USER_ID = "demo@zonagamer.com";
@@ -96,6 +101,27 @@ export default function EventDetails({ route, navigation }: Props) {
       { text: "Cancelar", style: "cancel" },
       { text: "Eliminar", style: "destructive", onPress: async () => { await eSvc.remove(id); Alert.alert("Eliminado"); navigation.goBack(); } },
     ]);
+  };
+
+  const toggleBlock = async () => {
+    try {
+      if (!ev) return;
+
+      const updated =
+        ev.status === "blocked"
+          ? await eSvc.unblock(id)
+          : await eSvc.block(id);
+
+      setEv(updated);
+
+      Alert.alert(
+        updated.status === "blocked"
+          ? "Publicación bloqueada"
+          : "Publicación desbloqueada"
+      );
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "No se pudo actualizar el estatus.");
+    }
   };
 
   // --- funciones para registro de asistencia ---
@@ -195,6 +221,24 @@ export default function EventDetails({ route, navigation }: Props) {
 
       <TouchableOpacity style={[styles.btn, { marginTop: 16 }]} onPress={save}><Text style={styles.btnTxt}>Guardar</Text></TouchableOpacity>
       <TouchableOpacity style={[styles.btn, { backgroundColor:"#ef4444", marginTop:8 }]} onPress={del}><Text style={styles.btnTxt}>Eliminar</Text></TouchableOpacity>
+      {isAdmin && (
+        <TouchableOpacity
+          style={[
+            styles.btn,
+            {
+              backgroundColor: ev.status === "blocked" ? "#22c55e" : "#f97316",
+              marginTop: 8,
+            },
+          ]}
+          onPress={toggleBlock}
+        >
+          <Text style={styles.btnTxt}>
+            {ev.status === "blocked"
+              ? "Desbloquear publicación"
+              : "Bloquear publicación"}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       <Text style={[styles.label, { marginTop: 16 }]}>Asistencia</Text>
 

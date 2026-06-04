@@ -42,7 +42,7 @@ export default function EventList({ navigation }: Props) {
     setEstIdx(eidx);
 
     const evs = await eSvc.list();
-    setItems(evs);
+    setItems(evs.filter((ev) => ev.status !== "blocked"));
     setLoading(false);
   };
 

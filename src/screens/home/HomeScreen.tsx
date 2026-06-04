@@ -16,6 +16,7 @@ import { RootStackParamList } from "../../navigation/StackNavigator";
 import { COLORS, FONT_SIZES } from "../../types";
 import { LinearGradient } from "expo-linear-gradient";
 
+
 // ✅ Hook (ViewModel ligero)
 import { useHomeVM } from "../../hooks/useHomeVM";
 
@@ -46,6 +47,9 @@ interface MenuOption {
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { user, signOut } = useAuth();
+
+  const role = String(user?.role ?? "").toLowerCase();
+  const isAdmin = role === "admin" || role === "administrador";
 
   // ✅ Estado/lógica movida al hook
   const { loading, error, outboxCount, lastSync, doSync } = useHomeVM();
@@ -181,6 +185,23 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               <MaterialIcons name="event" size={22} color="#93c5fd" />
               <Text style={styles.menuText}>Eventos</Text>
             </TouchableOpacity>
+
+            {isAdmin && (
+              <>
+                <View style={{ height: 12 }} />
+                <Text style={[styles.menuText, { opacity: 0.6, marginLeft: 10 }]}>
+                  Administración
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => go("blockedPublications")}
+                >
+                  <MaterialIcons name="block" size={22} color="#f97316" />
+                  <Text style={styles.menuText}>Publicaciones bloqueadas</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
             <View style={{ height: 12 }} />
             <Text style={[styles.menuText, { opacity: 0.6, marginLeft: 10 }]}>Cuenta</Text>

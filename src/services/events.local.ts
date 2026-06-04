@@ -31,6 +31,8 @@ export type Event = {
   promo?: string;
   capacity?: number;
 
+  status?: "active" | "blocked";
+
   createdAt?: number;
   updatedAt?: number;
 
@@ -141,6 +143,7 @@ export async function create(input: Omit<Event, "id">): Promise<Event> {
     ...input,
     id,
     venues: input.venues ?? [],
+    status: input.status ?? "active",
     createdAt: ts,
     updatedAt: ts,
   };
@@ -191,6 +194,14 @@ export async function remove(id: number): Promise<void> {
 
   await enqueueOutbox("events", "delete", String(id));
 
+}
+
+export async function block(id: number): Promise<Event> {
+  return await update(id, { status: "blocked" });
+}
+
+export async function unblock(id: number): Promise<Event> {
+  return await update(id, { status: "active" });
 }
 
 export async function isUserAttending(eventId: number, userId: string): Promise<boolean> {

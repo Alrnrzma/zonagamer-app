@@ -24,6 +24,8 @@ export type Tournament = {
   maxParticipants?: number;
   participants?: string[];
 
+  status?: "active" | "blocked";
+
   createdAt?: number | string;
   updatedAt?: number | string;
 
@@ -185,6 +187,14 @@ export async function remove(id: number): Promise<void> {
 
   await enqueueOutbox("tournaments", "delete", String(id));
 
+}
+
+export async function block(id: number): Promise<Tournament> {
+  return await update(id, { status: "blocked" });
+}
+
+export async function unblock(id: number): Promise<Tournament> {
+  return await update(id, { status: "active" });
 }
 
 // Registro simple (igual que en EventDetails)

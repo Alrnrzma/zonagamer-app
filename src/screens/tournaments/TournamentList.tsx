@@ -32,7 +32,7 @@ export default function TournamentList({ navigation }: Props) {
     setEstIdx(eidx);
 
     const ts = await tSvc.list();
-    setItems(ts);
+    setItems(ts.filter((t) => t.status !== "blocked"));
     setLoading(false);
   };
 

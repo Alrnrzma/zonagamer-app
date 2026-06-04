@@ -25,6 +25,8 @@ import EventList from "../screens/events/EventList";
 import EventDetails from "../screens/events/EventDetails";
 import EventCreate from "../screens/events/EventCreate";
 
+import BlockedPublications from "../screens/moderation/BlockedPublications";
+
 // ✅ Importamos el Hook del contexto en lugar de los servicios directos
 import { useAuth } from "../context/AuthContext";
 
@@ -54,6 +56,8 @@ export type RootStackParamList = {
   eventList: undefined;
   eventDetails: { id: number };
   eventCreate: undefined;
+
+  blockedPublications: undefined;
 
   GrupoList: undefined;
 };
@@ -176,6 +180,12 @@ function AppStack() {
         name="eventCreate"
         component={EventCreate}
         options={{ title: "Nuevo evento" }}
+      />
+
+      <Stack.Screen
+        name="blockedPublications"
+        component={BlockedPublications}
+        options={{ title: "Bloqueos" }}
       />
     </Stack.Navigator>
   );

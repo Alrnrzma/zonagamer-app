@@ -6,6 +6,7 @@ import * as tSvc from "../../services/tournaments.local";
 import * as gamesSvc from "../../services/games.local";
 import * as estSvc from "../../services/establecimientos.local";
 import * as ImagePicker from "expo-image-picker";
+import { useAuth } from "../../context/AuthContext";
 
 type Props = StackScreenProps<RootStackParamList, "tournamentDetails">;
 
@@ -25,8 +26,13 @@ export default function TournamentDetails({ route, navigation }: Props) {
   const [venues, setVenues] = useState<number[]>([]);
   const [nick, setNick] = useState<string>("");
 
+  const { user } = useAuth();
+  const role = String(user?.role ?? "").toLowerCase();
+  const isAdmin = role === "admin" || role === "administrador";
+
   const [gameIdx, setGameIdx] = useState<{ id:number; title:string }[]>([]);
   const [estIdx,  setEstIdx]  = useState<{ id:number; nombre:string }[]>([]);
+
 
   useEffect(() => {
     (async () => {
@@ -77,6 +83,27 @@ export default function TournamentDetails({ route, navigation }: Props) {
       { text: "Cancelar", style: "cancel" },
       { text: "Eliminar", style: "destructive", onPress: async () => { await tSvc.remove(id); Alert.alert("Eliminado"); navigation.goBack(); } },
     ]);
+  };
+
+  const toggleBlock = async () => {
+    try {
+      if (!t) return;
+
+      const updated =
+        t.status === "blocked"
+          ? await tSvc.unblock(id)
+          : await tSvc.block(id);
+
+      setT(updated);
+
+      Alert.alert(
+        updated.status === "blocked"
+          ? "Publicación bloqueada"
+          : "Publicación desbloqueada"
+      );
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "No se pudo actualizar el estatus.");
+    }
   };
 
   const doRegister = async () => {
@@ -168,6 +195,24 @@ export default function TournamentDetails({ route, navigation }: Props) {
       {/* acciones */}
       <TouchableOpacity style={[styles.btn, { marginTop: 16 }]} onPress={save}><Text style={styles.btnTxt}>Guardar</Text></TouchableOpacity>
       <TouchableOpacity style={[styles.btn, { backgroundColor:"#ef4444", marginTop:8 }]} onPress={del}><Text style={styles.btnTxt}>Eliminar</Text></TouchableOpacity>
+      {isAdmin && (
+        <TouchableOpacity
+          style={[
+            styles.btn,
+            {
+              backgroundColor: t.status === "blocked" ? "#22c55e" : "#f97316",
+              marginTop: 8,
+            },
+          ]}
+          onPress={toggleBlock}
+        >
+          <Text style={styles.btnTxt}>
+            {t.status === "blocked"
+              ? "Desbloquear publicación"
+              : "Bloquear publicación"}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* registro simple de participante */}
       <Text style={[styles.label, { marginTop: 16 }]}>Registrarme</Text>
