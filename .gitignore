@@ -41,5 +41,6 @@ yarn-error.*
 /android
 
 #Esto evita que se suban archivos temporales de Python.
+backend/.env
 backend/__pycache__/
 *.pyc
