@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../navigation/StackNavigator";
-import { loginFirebase } from "../../services/auth.firebase"; 
+import { loginApi } from "../../services/auth.api"; 
 import { useAuth } from "../../context/AuthContext";
 import { login as loginLocal, ensureDemoUsers } from "../../services/auth.local";
 
@@ -88,12 +88,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
       try {
         // ✅ Intento online con Firebase
-        await loginFirebase(email, password);
-
-        // AuthContext detectará Firebase y entrará solo
+        const apiUser = await loginApi(email, password);
+        await signIn(apiUser);
         return;
-      } catch (firebaseError: any) {
-        console.log("Login Firebase falló, intentando login local:", firebaseError);
+
+        // AuthContext detectará fastApi y entrará solo
+        
+      } catch (apiError: any) {
+        console.log("Login API falló, intentando login local:", apiError);
 
         // ✅ Fallback offline/local
         const localUser = await loginLocal(email, password);

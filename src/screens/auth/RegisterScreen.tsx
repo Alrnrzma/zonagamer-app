@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 
 // 👇 helpers de sesión local y tipos
-import { registerFirebase } from "../../services/auth.firebase";
+import { registerApi } from "../../services/auth.api";
 import { Role } from "../../types";
 import { upsertUser } from "../../services/auth.local";
 
@@ -74,7 +74,7 @@ export default function RegisterScreen({ navigation }: Props) {
     try {
       try {
         // ✅ Registro online con Firebase
-        const created = await registerFirebase(payload);
+        const created = await registerApi(payload);
 
         await signIn(created);
 
