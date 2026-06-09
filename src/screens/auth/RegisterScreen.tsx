@@ -57,50 +57,60 @@ export default function RegisterScreen({ navigation }: Props) {
     );
   }, [nombre, email, password, confirm]);
 
-  // crea el usuario en firebase auth + firestore + local y loguea
+  // crea el usuario en FastAPI/Supabase + local y loguea
   const handleRegister = async () => {
-    if (!formValid) return;
+  if (!formValid) return;
 
-    setLoading(true);
+  setLoading(true);
 
-    const payload = {
-      nombre: nombre.trim(),
-      email: email.trim().toLowerCase(),
-      password,
-      telefono: telefono.trim() || undefined,
-      role,
-    };
-
-    try {
-      try {
-        // ✅ Registro online con Firebase
-        const created = await registerApi(payload);
-
-        await signIn(created);
-
-        Alert.alert("Cuenta creada", "Tu registro fue exitoso.");
-      } catch (firebaseError: any) {
-        console.log("Registro Firebase falló, creando usuario local:", firebaseError);
-
-        // ✅ Registro local si no hay internet
-        const created = await upsertUser({
-          ...payload,
-          status: "active",
-        });
-
-        await signIn(created);
-
-        Alert.alert(
-          "Cuenta local creada",
-          "No hubo conexión con Firebase. Tu cuenta se guardó localmente."
-        );
-      }
-    } catch (err: any) {
-      Alert.alert("No se pudo registrar", err?.message ?? "Inténtalo de nuevo.");
-    } finally {
-      setLoading(false);
-    }
+  const payload = {
+    nombre: nombre.trim(),
+    email: email.trim().toLowerCase(),
+    password,
+    telefono: telefono.trim() || undefined,
+    role,
   };
+
+  try {
+    try {
+      // ✅ Registro online con FastAPI/Supabase
+      const created = await registerApi(payload);
+
+      // ✅ Guarda copia local para poder iniciar sesión offline después
+      await upsertUser({
+        nombre: created.nombre,
+        email: created.email,
+        password,
+        telefono: telefono.trim() || undefined,
+        role: created.role,
+        status: created.status ?? "active",
+      } as any);
+
+      await signIn(created);
+
+      Alert.alert("Cuenta creada", "Tu registro fue exitoso.");
+    } catch (apiError: any) {
+      console.log("Registro API falló, creando usuario local:", apiError);
+
+      // ✅ Registro local si no hay internet
+      const created = await upsertUser({
+        ...payload,
+        status: "active",
+      });
+
+      await signIn(created);
+
+      Alert.alert(
+        "Cuenta local creada",
+        "No hubo conexión. Tu cuenta se guardó localmente."
+      );
+    }
+  } catch (err: any) {
+    Alert.alert("No se pudo registrar", err?.message ?? "Inténtalo de nuevo.");
+  } finally {
+    setLoading(false);
+  }
+};
 
 
 
@@ -209,7 +219,7 @@ export default function RegisterScreen({ navigation }: Props) {
                 role === "admin" && styles.chipTextActive,
               ]}
             >
-              Admin (local)
+              Admin
             </Text>
           </TouchableOpacity>
         </View>

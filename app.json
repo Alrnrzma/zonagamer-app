@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mi-app",
-    "slug": "mi-app",
+    "name": "Zona Gamer",
+    "slug": "ZonaGamer",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo sin fondo.png",

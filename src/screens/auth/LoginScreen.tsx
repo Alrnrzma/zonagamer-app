@@ -15,7 +15,11 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../navigation/StackNavigator";
 import { loginApi } from "../../services/auth.api"; 
 import { useAuth } from "../../context/AuthContext";
-import { login as loginLocal, ensureDemoUsers } from "../../services/auth.local";
+import {
+  login as loginLocal,
+  ensureDemoUsers,
+  upsertUser,
+} from "../../services/auth.local";
 
 // ⚠️ desde screens/auth -> ../../types
 import { LoginFormData, COLORS, FONT_SIZES } from "../../types";
@@ -78,53 +82,59 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
 
  const authenticateUser = async (): Promise<void> => {
+  try {
+    setIsLoading(true);
+
+    const email = formData.username.trim().toLowerCase();
+    const password = formData.password;
+
+    await ensureDemoUsers();
+
     try {
-      setIsLoading(true);
+      // ✅ Intento online con FastAPI/Supabase
+      const apiUser = await loginApi(email, password);
 
-      const email = formData.username.trim().toLowerCase();
-      const password = formData.password;
+      // ✅ Guarda usuario + contraseña localmente para poder entrar offline después
+      await upsertUser({
+        nombre: apiUser.nombre,
+        email: apiUser.email,
+        password,
+        role: apiUser.role,
+        status: apiUser.status ?? "active",
+      } as any);
 
-      await ensureDemoUsers();
+      await signIn(apiUser);
+      return;
+    } catch (apiError: any) {
+      console.log("Login API falló, intentando login local:", apiError);
 
-      try {
-        // ✅ Intento online con Firebase
-        const apiUser = await loginApi(email, password);
-        await signIn(apiUser);
-        return;
+      // ✅ Fallback offline/local
+      const localUser = await loginLocal(email, password);
 
-        // AuthContext detectará fastApi y entrará solo
-        
-      } catch (apiError: any) {
-        console.log("Login API falló, intentando login local:", apiError);
-
-        // ✅ Fallback offline/local
-        const localUser = await loginLocal(email, password);
-
-        if (!localUser) {
-          Alert.alert(
-            "No se pudo iniciar sesión",
-            "No hay conexión o tus datos no existen localmente."
-          );
-          return;
-        }
-
-        await signIn(localUser);
-
+      if (!localUser) {
         Alert.alert(
-          "Modo offline",
-          "Iniciaste sesión con datos guardados localmente."
+          "No se pudo iniciar sesión",
+          "No hay conexión o tus datos no existen localmente."
         );
+        return;
       }
-    } catch (err: any) {
-      Alert.alert(
-        "No se pudo iniciar sesión",
-        err?.message ?? "Inténtalo de nuevo."
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
+      await signIn(localUser);
+
+      Alert.alert(
+        "Modo offline",
+        "Iniciaste sesión con datos guardados localmente."
+      );
+    }
+  } catch (err: any) {
+    Alert.alert(
+      "No se pudo iniciar sesión",
+      err?.message ?? "Inténtalo de nuevo."
+    );
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleForgotPassword = (): void => {
     Alert.alert("Recuperar contraseña", "Disponible próximamente.");
