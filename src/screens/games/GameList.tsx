@@ -17,6 +17,7 @@ import { useFocusEffect } from "@react-navigation/native";
 // 👇 NUEVO: rol y permisos
 import { getCurrentUser } from "../../services/auth.local";
 import { can } from "../../utils/can";
+import { Role } from "../../types";
 
 type Props = StackScreenProps<RootStackParamList, "gameList">;
 
@@ -24,7 +25,7 @@ export default function GameList({ navigation }: Props) {
   const [games, setGames] = useState<gamesSvc.Game[]>([]);
   const [estIdx, setEstIdx] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState<"admin" | "user">("user");
+  const [role, setRole] = useState<Role>("user");
 
   const load = async () => {
     setLoading(true);

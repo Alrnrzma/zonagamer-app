@@ -126,13 +126,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signOut = async () => {
-    try {
-      const { logoutFirebase } = await import("../services/auth.firebase");
-      await logoutFirebase();
-    } catch (e) {
-      console.log("No se pudo cerrar Firebase, cerrando local:", e);
-    }
-
     await localLogout();
     setUser(null);
   };

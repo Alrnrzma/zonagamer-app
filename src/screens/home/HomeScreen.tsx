@@ -155,7 +155,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         {lastSync && (
           <Text style={{ color: "white", opacity: 0.85, marginTop: 6 }}>
-            Último sync: {lastSync.ok}/{lastSync.total} OK • Fallos: {lastSync.fail}
+            Último sync: {lastSync.push.ok}/{lastSync.push.total} subidos • Fallos:{" "}
+            {lastSync.push.fail} • Descargados: {lastSync.pull.total}
           </Text>
         )}
       </View>

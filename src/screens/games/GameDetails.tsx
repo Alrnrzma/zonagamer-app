@@ -9,6 +9,7 @@ import * as ImagePicker from "expo-image-picker";
 // 👇 NUEVO: rol y permisos
 import { getCurrentUser } from "../../services/auth.local";
 import { can } from "../../utils/can";
+import { Role } from "../../types";
 
 type Props = StackScreenProps<RootStackParamList, "gameDetails">;
 
@@ -16,7 +17,7 @@ export default function GameDetails({ route, navigation }: Props) {
   const { id } = route.params;                 // id = 0 => crear
   const creating = id === 0;
 
-  const [role, setRole] = useState<"admin"|"user">("user");
+  const [role, setRole] = useState<Role>("user");
   const [game, setGame] = useState<gamesSvc.Game | null>(null);
   const [title, setTitle] = useState("");
   const [coverUri, setCoverUri] = useState<string | undefined>(undefined);
