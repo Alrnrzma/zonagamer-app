@@ -7,7 +7,7 @@ import { listOutbox, removeOutboxItem, OutboxItem } from "./outbox";
  * - Si pruebas en emulador Android: usa http://10.0.2.2:8000
  * - Si pruebas en celular físico: usa la IP de tu PC, ejemplo http://192.168.1.50:8000
  */
-const API_BASE_URL = "http://192.168.1.87:8000";
+const API_BASE_URL = "https://zonagamer-app.onrender.com";
 
 type PullItem = {
   entity: "events" | "games" | "tournaments" | "establecimientos";

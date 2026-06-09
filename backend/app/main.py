@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import health, sync
+from app.routers import health, sync, auth
 from app.database import init_db
 
 app = FastAPI(
@@ -24,3 +24,4 @@ def on_startup():
 
 app.include_router(health.router)
 app.include_router(sync.router)
+app.include_router(auth.router)
